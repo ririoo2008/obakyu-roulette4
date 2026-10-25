@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#e6b800">
+<title>尾羽急電鉄 ルーレット4</title>
+<style>
+:root{--yellow:#f4c900;--yellow-dark:#b38b00;--yellow-pale:#fff9d9;--ink:#242424;--muted:#777;--line:#ededed}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#fff;color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}
+main{width:min(760px,calc(100% - 32px));margin:0 auto;padding:38px 0 48px}
+.eyebrow{color:#a17d00;font-size:11px;font-weight:800;letter-spacing:.14em;text-align:center}
+h1{font-size:clamp(27px,5vw,38px);line-height:1.25;margin:10px 0 8px;letter-spacing:-.04em;text-align:center}
+.subtitle{color:var(--muted);margin:0 0 28px;font-size:14px;text-align:center}
+.panel{border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:0 8px 28px rgba(0,0,0,.045)}
+.label{color:var(--muted);font-size:12px;font-weight:700;letter-spacing:.08em;margin-bottom:12px}
+.result{background:var(--yellow-pale);border:1px solid #f0dc7a;border-radius:13px;padding:20px;text-align:center;min-height:126px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.result-caption{font-size:12px;color:#806700}
+.result-value{font-size:clamp(26px,6vw,36px);font-weight:850;overflow-wrap:anywhere}
+.result-value.rolling{animation:pulse .18s infinite alternate}
+@keyframes pulse{from{transform:scale(.98);opacity:.7}to{transform:scale(1.02);opacity:1}}
+button{appearance:none;border:0;border-radius:12px;padding:15px 18px;font-size:15px;font-weight:800;cursor:pointer;transition:transform .12s,filter .12s}
+button:active{transform:translateY(2px)}
+button:disabled{opacity:.65;cursor:wait}
+.primary{width:100%;margin-top:16px;background:var(--yellow);color:#292300;box-shadow:0 4px 0 var(--yellow-dark)}
+.primary:hover,.secondary:hover{filter:brightness(.97)}
+.secondary{background:#fff;border:1px solid #e5d48a;color:#695400}
+.actions{display:grid;grid-template-columns:1fr;gap:10px}
+.route-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:9px;margin-top:14px}
+.stop{border:1px solid #eee0a0;background:#fffdf0;padding:12px;border-radius:11px;animation:appear .25s ease-out}
+@keyframes appear{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+.stop-number{font-size:10px;color:#9b7800;font-weight:800;letter-spacing:.08em;margin-bottom:5px}
+.stop-name{font-weight:750;font-size:16px;overflow-wrap:anywhere}
+.status{min-height:1.5em;margin-top:13px;text-align:center;color:#8b6d00;font-size:13px;font-weight:700}
+.note{font-size:12px;line-height:1.7;color:var(--muted);text-align:center;margin:13px 0 0}
+footer{color:#aaa;font-size:10px;text-align:center;margin-top:24px;letter-spacing:.08em}
+@media(min-width:560px){.actions{grid-template-columns:1fr 180px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">OBAKYU RAILWAY · STATION ROULETTE</div>
+  <h1>尾羽急電鉄 ルーレット4</h1>
+  <p class="subtitle">行き先をランダムに抽選します。</p>
+  <section class="panel" aria-live="polite">
+    <div class="label">行き先</div>
+    <div class="result">
+      <div class="result-caption">抽選結果</div>
+      <div id="current" class="result-value">—駅</div>
+    </div>
+    <div class="actions">
+      <button id="spin" class="primary" type="button">ルーレットを回す</button>
+      <button id="copy" class="secondary" type="button" disabled>結果をコピー</button>
+    </div>
+    <div id="list" class="route-list"></div>
+    <div id="status" class="status" role="status"></div>
+    <p class="note">登録された59駅から1駅を抽選します。抽選演出は約5秒です。</p>
+  </section>
+  <footer>OBAKYU RAILWAY · STATION ROULETTE</footer>
+</main>
+<script>
+"use strict";
+const destinations = [
+"尾羽原","井口","梅郷","雲中","安越","十川真砂橋","千峰","南雲谷","雲谷","長峰",
+"西高徳","高徳","明神前","舞子台","紀田","穂","瀬舞","余美","千鳥","問屋町",
+"問屋蔵前","赤堀大沢","赤堀","新赤堀","塚野","金田","百鳥","西百鳥","支線尾羽","北尾羽",
+"新高徳","高徳整備場北","高徳空港","鵲橋","金田市","金田空港","金田新都心","新箱倉金田","南箱倉","上井口",
+"参田町","東本郷","本郷","西問屋町","本郷神宮前","千鳥山道","奥千鳥","南千鳥","水橋","飛岡",
+"垂岡","飛水竜田","南竜田","大原","新塚","飛水柏原","上金田","赤堀アリーナ","科学研究所跡"
+];
+const current = document.getElementById("current");
+const spin = document.getElementById("spin");
+const copy = document.getElementById("copy");
+const list = document.getElementById("list");
+const status = document.getElementById("status");
+let finalResult = "";
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const pick = () => destinations[Math.floor(Math.random() * destinations.length)];
+
+spin.addEventListener("click", async () => {
+  spin.disabled = true;
+  copy.disabled = true;
+  list.replaceChildren();
+  status.textContent = "行き先を抽選中…";
+  current.classList.add("rolling");
+  const start = Date.now();
+  while (Date.now() - start < 5000) {
+    current.textContent = pick();
+    await sleep(75);
+  }
+  finalResult = pick();
+  current.textContent = finalResult;
+  current.classList.remove("rolling");
+  const card = document.createElement("div");
+  card.className = "stop";
+  card.innerHTML = '<div class="stop-number">DESTINATION</div><div class="stop-name"></div>';
+  card.querySelector(".stop-name").textContent = finalResult;
+  list.appendChild(card);
+  status.textContent = "抽選完了";
+  copy.disabled = false;
+  spin.disabled = false;
+});
+
+copy.addEventListener("click", async () => {
+  if (!finalResult) return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(finalResult);
+    } else {
+      const area = document.createElement("textarea");
+      area.value = finalResult;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      const ok = document.execCommand("copy");
+      area.remove();
+      if (!ok) throw new Error("copy failed");
+    }
+    status.textContent = "結果をコピーしました：" + finalResult;
+  } catch (_) {
+    status.textContent = "コピーできませんでした。結果を長押ししてコピーしてください。";
+  }
+});
+</script>
+</body>
+</html>
